@@ -1,0 +1,76 @@
+# ---------------------------------------------------
+#  Visual Studio (classic)  --------------------------------
+# ---------------------------------------------------
+# Build output directories
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa]rchive/
+[Bb]in/
+[Oo]bj/
+
+# User‑specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.cachefile
+
+# VS project cache / metadata
+*.dbmdl
+*.psess
+*.sdf
+*.pdb
+*.ipch
+*.iobj
+*.ipdb
+*.ncb
+*.suo
+*.csproj.user
+
+# VS 2015+ VSIX / extensions
+*.vsix
+*.vsixmanifest
+
+# VS 2019+ workspace folder
+.vs/
+
+# ---------------------------------------------------
+#  Visual Studio Code ------------------------------------
+# ---------------------------------------------------
+.vscode/
+
+# ---------------------------------------------------
+#  Python -----------------------------------------------
+# ---------------------------------------------------
+# Byte‑code / compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment directories
+venv/
+ENV/
+env/
+.venv/
+env.bak/
+venv.bak/
+
+# Distribution / build artifacts
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Pip logs / temp files
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ---------------------------------------------------
+#  Miscellaneous ---------------------------------------
+# ---------------------------------------------------
+# OS‑specific junk (optional)
+.DS_Store
+Thumbs.db

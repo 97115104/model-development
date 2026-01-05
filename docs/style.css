@@ -10,12 +10,17 @@ body, .card, .card-body, #summary, #tokenCount {
   overflow-y: auto;
 }
 
-/* Tooltip styling (Bootstrap handles most) */
-[data-bs-toggle="tooltip"] {
-  cursor: help;
+/* Header background is dark; text is white */
+header.bg-dark {
+  background-color: #343a40 !important;
 }
 
 /* Footer styling */
 footer {
   font-size: 0.9rem;
+}
+
+/* Modal progress bar style */
+#loadingBar {
+  transition: width 0.2s ease;
 }

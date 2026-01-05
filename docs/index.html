@@ -12,16 +12,32 @@
 <body>
 
 <!-- ======== HEADER ========================================================= -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="#">Text‑Extractor Tool</a>
-    <div class="d-flex">
+<header class="bg-dark py-3">
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center text-white">
+      <h2 class="mb-0">Text‑Extractor Tool</h2>
       <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#aboutModal">
         About
       </button>
     </div>
   </div>
-</nav>
+</header>
+
+<!-- ======== LOADING MODAL ================================================== -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body text-center">
+        <p id="loadingMessage">Processing…</p>
+        <div class="progress mx-4 my-3" style="height: 20px;">
+          <div id="loadingBar" class="progress-bar" role="progressbar"
+               style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <div id="loadingDetail" class="small text-muted"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ======== MAIN ========================================================= -->
 <div class="container py-4">
@@ -71,7 +87,8 @@
 <!-- ======== FOOTER ========================================================= -->
 <footer class="bg-light text-center py-3">
   <small>
-    MIT License – see <a href="LICENSE" target="_blank">LICENSE</a> |
+    MIT License – see <a href="https://github.com/97115104/model-development/blob/main/docs/LICENSE"
+        target="_blank">LICENSE</a> |
     Source: <a href="https://github.com/97115104/model-development" target="_blank">GitHub</a>
   </small>
 </footer>

@@ -3,8 +3,18 @@
    ───────────────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
 
-function showProcessing(show = true) {
-  $('processing').style.display = show ? 'inline' : 'none';
+/* Show / hide the loading modal */
+function setLoading(show, msg = 'Processing…', percent = 0, detail = '') {
+  const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
+  if (show) {
+    $('loadingMessage').textContent = msg;
+    $('loadingBar').style.width = percent + '%';
+    $('loadingBar').setAttribute('aria-valuenow', percent);
+    $('loadingDetail').textContent = detail;
+    modal.show();
+  } else {
+    modal.hide();
+  }
 }
 
 /* Clean text: remove zero‑width, control, non‑BMP */
@@ -44,8 +54,7 @@ function copyToClipboard(text) {
 /* ─────────────────────────────────────────────────────
    OCR fallback for image‑based PDFs
    ───────────────────────────────────────────────────── */
-async function ocrPage(page) {
-  // Render page onto a canvas
+async function ocrPage(page, pageIndex, totalPages) {
   const canvas = document.createElement('canvas');
   const viewport = page.getViewport({ scale: 1.5 });
   canvas.width  = viewport.width;
@@ -53,21 +62,22 @@ async function ocrPage(page) {
   const ctx = canvas.getContext('2d');
   await page.render({ canvasContext: ctx, viewport }).promise;
 
-  // Run OCR on the canvas
-  const { data } = await Tesseract.recognize(canvas, 'eng', { logger: m => {} });
+  // OCR
+  const { data } = await Tesseract.recognize(canvas, 'eng', {
+    logger: m => setLoading(true, `OCR page ${pageIndex+1}/${totalPages}`, Math.round((pageIndex+1)/totalPages*100))
+  });
   return data.text;
 }
 
 /* Extract text from a single PDF page, with OCR fallback */
-async function extractTextFromPage(page) {
+async function extractTextFromPage(page, pageIndex, totalPages) {
   const txt = await page.getTextContent();
   const raw = txt.items.map(it => it.str).join(' ');
   if (cleanText(raw).length > 20) {
     return cleanText(raw);
   }
   // If text is too short, try OCR
-  const ocr = await ocrPage(page);
-  return cleanText(ocr);
+  return await ocrPage(page, pageIndex, totalPages);
 }
 
 /* ─────────────────────────────────────────────────────
@@ -77,19 +87,22 @@ $('fetchUrlBtn').addEventListener('click', async () => {
   const url = $('urlInput').value.trim();
   if (!url) { alert('Please enter a URL'); return; }
 
-  showProcessing(true);
+  setLoading(true, 'Fetching URL…');
   try {
     const isPdf = url.toLowerCase().endsWith('.pdf');
     const response = await fetch(url, { mode: 'cors' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     if (isPdf) {
+      setLoading(true, 'Downloading PDF…');
       const data = await response.arrayBuffer();
+      setLoading(true, 'Parsing PDF…', 0);
       const pdf  = await pdfjsLib.getDocument({ data }).promise;
       let allText = '';
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
-        allText += await extractTextFromPage(page) + '\n\n';
+        allText += await extractTextFromPage(page, i-1, pdf.numPages) + '\n\n';
+        setLoading(true, `Processing PDF…`, Math.round(i / pdf.numPages * 100));
       }
       $('summary').textContent = `Fetched PDF: ${url}`;
       $('tokenCount').textContent = `Estimated tokens: ${estimateTokens(allText)}`;
@@ -98,6 +111,7 @@ $('fetchUrlBtn').addEventListener('click', async () => {
       $('downloadBtn').disabled = false;
       $('copyBtn').disabled = false;
     } else {
+      setLoading(true, 'Fetching page…');
       const html = await response.text();
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
@@ -113,10 +127,10 @@ $('fetchUrlBtn').addEventListener('click', async () => {
     }
     $('combined').classList.remove('collapse');
     $('combined').classList.add('show');
-    showProcessing(false);
+    setLoading(false);
   } catch (e) {
     console.error(e);
-    showProcessing(false);
+    setLoading(false);
     alert('Could not fetch the page. Check CORS or the console for details.');
   }
 });
@@ -128,7 +142,7 @@ $('processFileBtn').addEventListener('click', async () => {
   const files = $('fileInput').files;
   if (!files.length) { alert('Please select at least one file'); return; }
 
-  showProcessing(true);
+  setLoading(true, 'Reading files…');
   const results = [];
   const summaries = [];
 
@@ -136,6 +150,7 @@ $('processFileBtn').addEventListener('click', async () => {
     const ext = file.name.split('.').pop().toLowerCase();
     try {
       if (ext === 'pdf') {
+        setLoading(true, `Processing ${file.name}…`);
         const data = await new Promise(res => {
           const r = new FileReader();
           r.onload = e => res(e.target.result);
@@ -145,7 +160,8 @@ $('processFileBtn').addEventListener('click', async () => {
         let allText = '';
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
-          allText += await extractTextFromPage(page) + '\n\n';
+          allText += await extractTextFromPage(page, i-1, pdf.numPages) + '\n\n';
+          setLoading(true, `Processing ${file.name}…`, Math.round(i / pdf.numPages * 100));
         }
         results.push(allText.trim());
         summaries.push(`${file.name} (PDF, ${pdf.numPages} pages)`);
@@ -175,7 +191,7 @@ $('processFileBtn').addEventListener('click', async () => {
   $('toggleBtn').disabled = false;
   $('downloadBtn').disabled = false;
   $('copyBtn').disabled = false;
-  showProcessing(false);
+  setLoading(false);
 });
 
 /* ─────────────────────────────────────────────────────
@@ -199,14 +215,4 @@ $('downloadBtn').addEventListener('click', () => {
 
 $('copyBtn').addEventListener('click', () => {
   copyToClipboard($('output').textContent);
-});
-
-/* ─────────────────────────────────────────────────────
-   Enable tooltips (Bootstrap)
-   ───────────────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', () => {
-  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-  tooltipTriggerList.map(function (tooltipTriggerEl) {
-    new bootstrap.Tooltip(tooltipTriggerEl);
-  });
 });

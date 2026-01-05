@@ -7,35 +7,67 @@ function showProcessing(show = true) {
   $('processing').style.display = show ? 'inline' : 'none';
 }
 
+/* Clean text: remove zero‑width, control, non‑BMP */
 function cleanText(text) {
   const zeroWidth = /[\u200B-\u200D\uFEFF]/g;
-  const control = /[\x00-\x1F\x7F]/g;
-  const nonBmp = /[\uD800-\uDFFF]/g;
+  const control   = /[\x00-\x1F\x7F]/g;
+  const nonBmp    = /[\uD800-\uDFFF]/g;
   return text.replace(zeroWidth, '')
              .replace(control, '')
              .replace(nonBmp, '')
              .trim();
 }
 
+/* Estimate tokens (simple word count) */
 function estimateTokens(text) {
-  if (!text) return 0;
-  return text.split(/\s+/).length;
+  return text ? text.split(/\s+/).length : 0;
 }
 
+/* Download as .txt */
 function downloadTxt(content, name = 'combined.txt') {
   const blob = new Blob([content], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href      = url;
+  a.download  = name;
   a.click();
   URL.revokeObjectURL(url);
 }
 
+/* Copy to clipboard */
 function copyToClipboard(text) {
   navigator.clipboard.writeText(text)
     .then(() => alert('Copied to clipboard!'))
     .catch(err => console.error('Copy failed', err));
+}
+
+/* ─────────────────────────────────────────────────────
+   OCR fallback for image‑based PDFs
+   ───────────────────────────────────────────────────── */
+async function ocrPage(page) {
+  // Render page onto a canvas
+  const canvas = document.createElement('canvas');
+  const viewport = page.getViewport({ scale: 1.5 });
+  canvas.width  = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext('2d');
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  // Run OCR on the canvas
+  const { data } = await Tesseract.recognize(canvas, 'eng', { logger: m => {} });
+  return data.text;
+}
+
+/* Extract text from a single PDF page, with OCR fallback */
+async function extractTextFromPage(page) {
+  const txt = await page.getTextContent();
+  const raw = txt.items.map(it => it.str).join(' ');
+  if (cleanText(raw).length > 20) {
+    return cleanText(raw);
+  }
+  // If text is too short, try OCR
+  const ocr = await ocrPage(page);
+  return cleanText(ocr);
 }
 
 /* ─────────────────────────────────────────────────────
@@ -49,46 +81,38 @@ $('fetchUrlBtn').addEventListener('click', async () => {
   try {
     const isPdf = url.toLowerCase().endsWith('.pdf');
     const response = await fetch(url, { mode: 'cors' });
-
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     if (isPdf) {
-      // PDF fetched as ArrayBuffer
       const data = await response.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data }).promise;
+      const pdf  = await pdfjsLib.getDocument({ data }).promise;
       let allText = '';
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
-        const txt = await page.getTextContent();
-        allText += txt.items.map(it => it.str).join(' ') + '\n\n';
+        allText += await extractTextFromPage(page) + '\n\n';
       }
-      const cleaned = cleanText(allText);
       $('summary').textContent = `Fetched PDF: ${url}`;
-      $('tokenCount').textContent = `Estimated tokens: ${estimateTokens(cleaned)}`;
-      $('combined').classList.remove('collapse');
-      $('combined').classList.add('show');
-      $('output').textContent = cleaned;
+      $('tokenCount').textContent = `Estimated tokens: ${estimateTokens(allText)}`;
+      $('output').textContent = allText.trim();
       $('toggleBtn').disabled = true;
       $('downloadBtn').disabled = false;
       $('copyBtn').disabled = false;
     } else {
-      // Regular HTML page
       const html = await response.text();
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
       const article = new Readability(doc).parse();
       const raw = article ? article.textContent : 'No readable content found.';
       const cleaned = cleanText(raw);
-
       $('summary').textContent = `Fetched: ${url}`;
       $('tokenCount').textContent = `Estimated tokens: ${estimateTokens(cleaned)}`;
-      $('combined').classList.remove('collapse');
-      $('combined').classList.add('show');
       $('output').textContent = cleaned;
       $('toggleBtn').disabled = true;
       $('downloadBtn').disabled = false;
       $('copyBtn').disabled = false;
     }
+    $('combined').classList.remove('collapse');
+    $('combined').classList.add('show');
     showProcessing(false);
   } catch (e) {
     console.error(e);
@@ -112,7 +136,6 @@ $('processFileBtn').addEventListener('click', async () => {
     const ext = file.name.split('.').pop().toLowerCase();
     try {
       if (ext === 'pdf') {
-        // PDF → Text
         const data = await new Promise(res => {
           const r = new FileReader();
           r.onload = e => res(e.target.result);
@@ -122,13 +145,11 @@ $('processFileBtn').addEventListener('click', async () => {
         let allText = '';
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
-          const txt = await page.getTextContent();
-          allText += txt.items.map(it => it.str).join(' ') + '\n\n';
+          allText += await extractTextFromPage(page) + '\n\n';
         }
-        results.push(cleanText(allText));
+        results.push(allText.trim());
         summaries.push(`${file.name} (PDF, ${pdf.numPages} pages)`);
       } else if (['txt', 'md', 'markdown'].includes(ext)) {
-        // Plain text or markdown
         const raw = await new Promise(res => {
           const r = new FileReader();
           r.onload = e => res(e.target.result);
@@ -145,15 +166,12 @@ $('processFileBtn').addEventListener('click', async () => {
     }
   }
 
-  // Combine
   const combinedText = results.join('\n\n---\n\n');
-
-  // UI
   $('summary').textContent = 'Files processed:\n' + summaries.join('\n');
   $('tokenCount').textContent = `Estimated tokens: ${estimateTokens(combinedText)}`;
+  $('output').textContent = combinedText.trim();
   $('combined').classList.remove('collapse');
   $('combined').classList.add('show');
-  $('output').textContent = combinedText;
   $('toggleBtn').disabled = false;
   $('downloadBtn').disabled = false;
   $('copyBtn').disabled = false;
@@ -176,13 +194,11 @@ $('toggleBtn').addEventListener('click', () => {
    4️⃣  Download / Copy
    ───────────────────────────────────────────────────── */
 $('downloadBtn').addEventListener('click', () => {
-  const txt = $('output').textContent;
-  downloadTxt(txt, 'combined.txt');
+  downloadTxt($('output').textContent, 'combined.txt');
 });
 
 $('copyBtn').addEventListener('click', () => {
-  const txt = $('output').textContent;
-  copyToClipboard(txt);
+  copyToClipboard($('output').textContent);
 });
 
 /* ─────────────────────────────────────────────────────

@@ -1,0 +1,21 @@
+/* Left‑aligned, clean layout */
+body, .card, .card-body, #summary, #tokenCount {
+  text-align: left;
+}
+
+/* Ensure the text block wraps */
+#output {
+  white-space: pre-wrap;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Tooltip styling (Bootstrap handles most) */
+[data-bs-toggle="tooltip"] {
+  cursor: help;
+}
+
+/* Footer styling */
+footer {
+  font-size: 0.9rem;
+}
